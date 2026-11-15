@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitch Fishing Auto-Buyer (gans_mann)
 // @namespace    local.twitch.fishing
-// @version      1.8
+// @version      2.0
 // @author       toshaToffifee
 // @description  Автопокупка награды за баллы канала ("Рыбалка") + автосбор бонусных баллов
 // @match        https://www.twitch.tv/*
@@ -67,6 +67,10 @@
 
     function sleep(ms) {
         return new Promise(r => setTimeout(r, ms));
+    }
+
+    function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
     }
 
     // ---------- Проверка канала и онлайн-статуса ----------
@@ -326,55 +330,62 @@
     function buildPanel() {
         if (document.getElementById('afb-panel')) return;
         if (!shouldShowPanel()) return;
+        if (!document.body) return;
 
         const panel = document.createElement('div');
         panel.id = 'afb-panel';
+        // Полупрозрачный фон + блюр, фиксированная ширина, скругленные углы
         panel.style.cssText = [
-            'position:fixed', 'z-index:99999',
-            'background:#18181b', 'color:#efeff1', 'border:1px solid #9147ff',
-            'border-radius:8px', 'padding:8px 10px', 'font:13px/1.4 sans-serif',
-            'box-shadow:0 2px 10px rgba(0,0,0,.5)'
+            'position:fixed', 'z-index:2147483647',
+            'background:#111c', 'color:#eee',
+            'border-radius:8px', 'border:1px solid #9147ff',
+            'font:12px system-ui, Segoe UI, Roboto, Arial',
+            'backdrop-filter:blur(4px)', 'box-shadow:0 2px 10px rgba(0,0,0,.4)',
+            'user-select:none', 'width:250px'
         ].join(';');
-        if (ui.pos) {
-            panel.style.left = ui.pos.left + 'px';
-            panel.style.top = ui.pos.top + 'px';
-        } else {
-            panel.style.bottom = '80px';
-            panel.style.right = '16px';
-        }
+
+        const inputStyle = 'width:110px;text-align:left;border-radius:4px;border:1px solid #555;background:#222;color:#eee;padding:2px 4px;';
+        const numStyle = 'width:60px;text-align:right;border-radius:4px;border:1px solid #555;background:#222;color:#eee;padding:2px 4px;';
 
         panel.innerHTML = `
-            <div id="afb-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:move;user-select:none;">
-                <span style="font-weight:700;">🎣 Авто-рыбалка</span>
-                <button id="afb-collapse" title="Свернуть/развернуть" style="background:none;border:none;color:#a970ff;cursor:pointer;font-size:14px;padding:0 2px;">–</button>
+            <div id="afb-header" style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:move;">
+                <strong style="font-weight:600;">🎣 Рыбалка:</strong>
+                <span id="afb-status" style="opacity:.9;">выкл</span>
+                <div style="flex:1;"></div>
+                <button id="afb-collapse" title="Свернуть/развернуть" style="background:#222;color:#eee;border:0;border-radius:6px;padding:2px 6px;cursor:pointer;">–</button>
             </div>
-            <div id="afb-body" style="width:250px;margin-top:6px;">
-                <label style="display:block;margin:4px 0;">
-                    Стример: <input id="afb-channel" type="text" style="width:130px;background:#0e0e10;color:#fff;border:1px solid #53535f;border-radius:4px;padding:2px 4px;">
+            <div id="afb-body" style="display:flex;flex-direction:column;gap:8px;padding:8px;">
+                <label style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>Стример:</span>
+                    <input id="afb-channel" type="text" style="${inputStyle}">
                 </label>
-                <label style="display:block;margin:4px 0;">
-                    Награда: <input id="afb-name" type="text" style="width:130px;background:#0e0e10;color:#fff;border:1px solid #53535f;border-radius:4px;padding:2px 4px;">
+                <label style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>Награда:</span>
+                    <input id="afb-name" type="text" style="${inputStyle}">
                 </label>
-                <label style="display:block;margin:4px 0;">
-                    Интервал, сек: <input id="afb-interval" type="number" min="10" style="width:60px;background:#0e0e10;color:#fff;border:1px solid #53535f;border-radius:4px;padding:2px 4px;">
+                <label style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>Интервал, сек:</span>
+                    <input id="afb-interval" type="number" min="10" style="${numStyle}">
                 </label>
-                <label style="display:block;margin:4px 0;">
-                    Мин. баланс: <input id="afb-minbal" type="number" min="0" style="width:60px;background:#0e0e10;color:#fff;border:1px solid #53535f;border-radius:4px;padding:2px 4px;">
+                <label style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>Мин. баланс:</span>
+                    <input id="afb-minbal" type="number" min="0" style="${numStyle}">
                 </label>
-                <label style="display:flex;align-items:center;gap:6px;margin:6px 0;cursor:pointer;">
-                    <input id="afb-live" type="checkbox"> Только когда стрим онлайн
+                <label style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                    <span>Только когда онлайн:</span>
+                    <input id="afb-live" type="checkbox">
                 </label>
-                <label style="display:flex;align-items:center;gap:6px;margin:6px 0;cursor:pointer;">
-                    <input id="afb-bonus" type="checkbox"> Собирать бонусные баллы
+                <label style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                    <span>Собирать бонусы:</span>
+                    <input id="afb-bonus" type="checkbox">
                 </label>
-                <label style="display:flex;align-items:center;gap:6px;margin:6px 0;cursor:pointer;">
-                    <input id="afb-everywhere" type="checkbox"> Панель на всех страницах Twitch
+                <label style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                    <span>Панель на всех страницах:</span>
+                    <input id="afb-everywhere" type="checkbox">
                 </label>
-                <div style="margin:8px 0;">
-                    <button id="afb-toggle" style="width:100%;padding:5px;border:none;border-radius:4px;cursor:pointer;font-weight:700;background:#9147ff;color:#fff;">Включить</button>
-                </div>
+                <button id="afb-toggle" style="width:100%;padding:5px;border:none;border-radius:6px;cursor:pointer;font-weight:600;background:#9147ff;color:#fff;">Включить</button>
                 <div id="afb-log" style="font-size:11px;color:#a970ff;word-break:break-word;max-height:60px;overflow:hidden;"></div>
-                <div style="font-size:10px;color:#8b8b93;text-align:right;margin-top:6px;">by toshaToffifee</div>
+                <div style="font-size:10px;color:#888;text-align:right;">by toshaToffifee</div>
             </div>
         `;
         document.body.appendChild(panel);
@@ -382,41 +393,60 @@
         const body = panel.querySelector('#afb-body');
         const header = panel.querySelector('#afb-header');
         const collapseBtn = panel.querySelector('#afb-collapse');
+        const statusEl = panel.querySelector('#afb-status');
 
-        // Сворачивание
+        // Сворачивание: кнопка "–"/"+", обводка только в развернутом виде
         function applyCollapsed() {
-            body.style.display = ui.collapsed ? 'none' : 'block';
-            collapseBtn.textContent = ui.collapsed ? '▲' : '–';
+            body.style.display = ui.collapsed ? 'none' : 'flex';
+            collapseBtn.textContent = ui.collapsed ? '+' : '–';
+            panel.style.border = ui.collapsed ? '1px solid transparent' : '1px solid #9147ff';
         }
-        collapseBtn.addEventListener('click', () => {
+        collapseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             ui.collapsed = !ui.collapsed;
             saveUi(ui);
             applyCollapsed();
         });
-        applyCollapsed();
 
-        // Перетаскивание за заголовок
-        let drag = null;
-        header.addEventListener('mousedown', (e) => {
+        // Перетаскивание за заголовок (pointer-события); клик без движения сворачивает
+        let dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+        header.addEventListener('pointerdown', (e) => {
             if (e.target === collapseBtn) return;
-            const rect = panel.getBoundingClientRect();
-            drag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top, moved: false };
-            e.preventDefault();
+            dragging = true;
+            moved = false;
+            header.setPointerCapture(e.pointerId);
+            const r = panel.getBoundingClientRect();
+            ox = e.clientX; oy = e.clientY;
+            sx = r.left; sy = r.top;
         });
-        document.addEventListener('mousemove', (e) => {
-            if (!drag) return;
-            drag.moved = true;
+        header.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            const dx = e.clientX - ox, dy = e.clientY - oy;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
             panel.style.bottom = 'auto';
             panel.style.right = 'auto';
-            panel.style.left = Math.max(0, Math.min(window.innerWidth - 60, e.clientX - drag.dx)) + 'px';
-            panel.style.top = Math.max(0, Math.min(window.innerHeight - 30, e.clientY - drag.dy)) + 'px';
+            panel.style.left = clamp(sx + dx, 0, innerWidth - panel.offsetWidth) + 'px';
+            panel.style.top = clamp(sy + dy, 0, innerHeight - panel.offsetHeight) + 'px';
         });
-        document.addEventListener('mouseup', () => {
-            if (drag && drag.moved) {
-                ui.pos = { left: parseInt(panel.style.left, 10), top: parseInt(panel.style.top, 10) };
+        header.addEventListener('pointerup', (e) => {
+            if (!dragging) return;
+            dragging = false;
+            header.releasePointerCapture(e.pointerId);
+            if (moved) {
+                const r = panel.getBoundingClientRect();
+                ui.pos = { left: r.left, top: r.top };
                 saveUi(ui);
+            } else if (e.target !== collapseBtn) {
+                ui.collapsed = !ui.collapsed;
+                saveUi(ui);
+                applyCollapsed();
             }
-            drag = null;
+        });
+
+        window.addEventListener('resize', () => {
+            const r = panel.getBoundingClientRect();
+            panel.style.left = clamp(r.left, 0, innerWidth - panel.offsetWidth) + 'px';
+            panel.style.top = clamp(r.top, 0, innerHeight - panel.offsetHeight) + 'px';
         });
 
         const chInput = panel.querySelector('#afb-channel');
@@ -446,8 +476,8 @@
             cfg.showPanelEverywhere = everywhereInput.checked;
             saveCfg(cfg);
         }
-        chInput.addEventListener('change', syncCfg);
-        nameInput.addEventListener('change', syncCfg);
+        chInput.addEventListener('input', syncCfg);
+        nameInput.addEventListener('input', syncCfg);
         liveInput.addEventListener('change', syncCfg);
         bonusInput.addEventListener('change', syncCfg);
         everywhereInput.addEventListener('change', syncCfg);
@@ -457,6 +487,14 @@
         });
         minInput.addEventListener('change', syncCfg);
 
+        function applyToggleState() {
+            toggleBtn.textContent = timer ? 'Выключить' : 'Включить';
+            toggleBtn.style.background = timer ? '#e91916' : '#9147ff';
+            statusEl.textContent = timer ? 'вкл' : 'выкл';
+            statusEl.style.color = timer ? '#5fd35f' : '#ff5f5f';
+            statusEl.style.fontWeight = '600';
+        }
+
         toggleBtn.addEventListener('click', () => {
             syncCfg();
             if (timer) {
@@ -464,14 +502,25 @@
             } else {
                 start();
             }
-            toggleBtn.textContent = timer ? 'Выключить' : 'Включить';
-            toggleBtn.style.background = timer ? '#e91916' : '#9147ff';
+            applyToggleState();
         });
+
+        // Начальная позиция: правый нижний угол, если не сохранена
+        if (ui.pos) {
+            panel.style.left = clamp(ui.pos.left, 0, innerWidth - panel.offsetWidth) + 'px';
+            panel.style.top = clamp(ui.pos.top, 0, innerHeight - panel.offsetHeight) + 'px';
+        } else {
+            const r = panel.getBoundingClientRect();
+            panel.style.left = Math.max(0, innerWidth - r.width - 12) + 'px';
+            panel.style.top = Math.max(0, innerHeight - r.height - 12) + 'px';
+        }
+
+        applyCollapsed();
+        applyToggleState();
 
         if (cfg.autostart) {
             start();
-            toggleBtn.textContent = 'Выключить';
-            toggleBtn.style.background = '#e91916';
+            applyToggleState();
         }
     }
 
