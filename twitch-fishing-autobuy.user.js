@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Twitch Fishing Auto-Buyer (gans_mann)
+// @name         Twitch Fishing Auto-Buyer
 // @namespace    local.twitch.fishing
-// @version      2.0
+// @version      2.1
 // @author       toshaToffifee
 // @description  Автопокупка награды за баллы канала ("Рыбалка") + автосбор бонусных баллов
 // @match        https://www.twitch.tv/*
@@ -299,7 +299,7 @@
                 return;
             }
             confirm.click();
-            log('Покупка выполнена! Смотри чат: должно прийти "Поймана рыба".');
+            log('Покупка выполнена!');
             await sleep(500);
             pressEscape();
         } catch (e) {
